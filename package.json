@@ -1,22 +1,25 @@
 {
   "name": "swagger-ui-electron",
   "version": "1.0.0",
-  "description": "",
+  "description": "swagger ui with electron",
+  "authors": "niq",
   "main": "main.js",
   "scripts": {
+    "dev": "electron .",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make --platform win32 --platform linux"
+    "make": "electron-forge make",
+    "make-win": "electron-forge make --platform win32",
+    "make-linux": "electron-forge make --platform linux",
+    "make-mac": "electron-forge make --platform darwin"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.0",
     "swagger-ui-dist": "^3.47.1"
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.54",
-    "@electron-forge/maker-squirrel": "^6.0.0-beta.54",
     "@electron-forge/maker-zip": "^6.0.0-beta.54",
     "electron": "^12.0.5"
   },
@@ -24,12 +27,6 @@
     "forge": {
       "packagerConfig": {},
       "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "swagger_ui_electron"
-          }
-        },
         {
           "name": "@electron-forge/maker-zip",
           "platforms": [
