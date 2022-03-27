@@ -23,7 +23,7 @@ jobs:
           curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
           curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
           node sync.js
-          if [ $? == 1 ]; then exit 0; fi;
+          if [ $? == 1 ]; then exit 0; fi
           export VER=$(cat ver.txt)
           echo "::set-output name=ver::$VER"
           apt-get update && apt-get install -y zip && chown root:root /github/home
@@ -60,8 +60,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./darwin/x64/swagger-ui-electron-darwin-x64-{{ needs.build.outputs.ver }}.zip
-          asset_name: swagger-ui-electron-darwin-x64-{{ needs.build.outputs.ver }}.zip
+          asset_path: ./darwin/x64/swagger-ui-electron-darwin-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-darwin-x64-${{ needs.build.outputs.ver }}.zip
           asset_content_type: application/zip
       - name: Upload Linux Release Asset
         if: steps.create_release.outputs.upload_url
@@ -70,8 +70,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/x64/swagger-ui-electron-linux-x64-{{ needs.build.outputs.ver }}.zip
-          asset_name: swagger-ui-electron-linux-x64-{{ needs.build.outputs.ver }}.zip
+          asset_path: ./linux/x64/swagger-ui-electron-linux-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-linux-x64-${{ needs.build.outputs.ver }}.zip
           asset_content_type: application/zip
       - name: Upload Windows Release Asset
         if: steps.create_release.outputs.upload_url
@@ -80,7 +80,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./win32/x64/swagger-ui-electron-win32-x64-{{ needs.build.outputs.ver }}.zip
-          asset_name: swagger-ui-electron-win32-x64-{{ needs.build.outputs.ver }}.zip
+          asset_path: ./win32/x64/swagger-ui-electron-win32-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-win32-x64-${{ needs.build.outputs.ver }}.zip
           asset_content_type: application/zip
 
