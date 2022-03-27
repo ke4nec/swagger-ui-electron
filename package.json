@@ -2,7 +2,7 @@
   "name": "swagger-ui-electron",
   "version": "1.0.0",
   "description": "swagger ui with electron",
-  "authors": "niq",
+  "authors": "ke4nec@qq.com",
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
