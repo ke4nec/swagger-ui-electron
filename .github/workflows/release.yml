@@ -28,6 +28,7 @@ jobs:
           echo "::set-output name=ver::$VER"
           apt-get update && apt-get install -y zip && chown root:root /github/home
       - run: |
+          npm i swagger-ui-dist@latest
           npm i
           npm run make-all
       - uses: actions/upload-artifact@v3
