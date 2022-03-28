@@ -9,7 +9,15 @@ const npm = require('./npm.json');
   console.log(npm.version)
   console.log(github.tag_name)
   console.log(github.tag_name < npm.version)
-  if (github.tag_name < npm.version) {
+  
+  const tagName = parseInt(github.tag_name.split('.').join(''))
+  const version = parseInt(npm.version.split('.').join(''))
+  
+  if (isNaN(tagName) || isNaN(version)) {
+    process.exit(0)
+  }
+  
+  if (tagName < version) {
     try {
       fs.writeFileSync('./ver.txt', npm.version)
     } catch (err) {
