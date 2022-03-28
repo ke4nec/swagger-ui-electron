@@ -9,6 +9,16 @@ on:
       - master
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: check_verion
+        run: |
+          curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
+          curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          node sync.js
+          if [ $? == 1 ]; then exit 0; fi
   build:
     runs-on: ubuntu-latest
     container:
