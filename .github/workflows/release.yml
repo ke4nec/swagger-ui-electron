@@ -20,6 +20,7 @@ jobs:
           node sync.js
           if [ $? == 1 ]; then exit 0; fi
   build:
+    needs: check
     runs-on: ubuntu-latest
     container:
       image: electronuserland/builder:wine
