@@ -8,24 +8,29 @@ const npm = require('./npm.json');
 (async () => {
   console.log(npm.version)
   console.log(github.tag_name)
-  console.log(github.tag_name < npm.version)
+  // console.log(github.tag_name < npm.version)
   
-  const tagName = parseInt(github.tag_name.split('.').join(''))
-  const version = parseInt(npm.version.split('.').join(''))
-  
-  if (isNaN(tagName) || isNaN(version)) {
-    process.exit(0)
-  }
-  
-  if (tagName < version) {
-    try {
-      fs.writeFileSync('./ver.txt', npm.version)
-    } catch (err) {
-      console.error(err)
+  const tagNames = github.tag_name.split('.')
+  const versions = npm.version.split('.')
+
+  for (let i = 0; i < Math.min(tagNames.length, versions.length); i++) {
+    const ver1 = parseInt(tagNames[i])
+    const ver2 = parseInt(versions[i])
+    if (isNaN(ver1) || isNaN(ver2)) {
+      process.exit(0)
     }
 
-    process.exit(0)
-  } else {
-    process.exit(1)
+    if (ver1 < ver2) {
+      try {
+        console.log('need update')
+        fs.writeFileSync('./ver.txt', npm.version)
+      } catch (err) {
+        console.error(err)
+      }
+
+      process.exit(0)
+    }
   }
+
+  process.exit(1)
 })()
