@@ -13,84 +13,95 @@ permissions:
   contents: write
 
 jobs:
-  check:
+  check-version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check-version.outputs.version }}
+      should-release: ${{ steps.check-version.outputs.should-release }}
     steps:
-      - uses: actions/checkout@v4
-      - name: check_version
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Check version
+        id: check-version
         run: |
-          curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
-          curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          curl -s https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
+          curl -s https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          
           node sync.js
-          if [ $? == 1 ]; then exit 0; fi
+          EXIT_CODE=$?
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            VERSION=$(cat ver.txt)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "✓ New version available: $VERSION"
+          else
+            echo "version=none" >> $GITHUB_OUTPUT
+            echo "should-release=false" >> $GITHUB_OUTPUT
+            echo "✓ No update needed"
+          fi
 
   build:
-    needs: check
-    runs-on: ubuntu-latest
-    container:
-      image: electronuserland/builder:wine
-    outputs:
-      ver: ${{ steps.prepare.outputs.ver }}
+    needs: check-version
+    if: needs.check-version.outputs.should-release == 'true'
+    runs-on: ${{ matrix.os == 'darwin' && 'macos-latest' || (matrix.os == 'win32' && 'windows-latest' || 'ubuntu-latest') }}
+    strategy:
+      matrix:
+        os: [win32, linux, darwin]
+        include:
+          - os: win32
+            script: make-win
+          - os: linux
+            script: make-linux
+          - os: darwin
+            script: make-mac
     steps:
-      - uses: actions/checkout@v4
-      - name: prepare
-        id: prepare
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
         run: |
-          curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
-          curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
-          node sync.js
-          if [ $? == 1 ]; then exit 0; fi
-          export VER=$(cat ver.txt)
-          echo "ver=$VER" >> $GITHUB_OUTPUT
-          apt-get update && apt-get install -y zip && chown root:root /github/home
-      - run: |
           npm i swagger-ui-dist@latest
           npm i
-          npm run make-all
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifacts
-          path: out/make/zip/
 
-  deploy:
-    needs: build
+      - name: Build for ${{ matrix.os }}
+        run: npm run ${{ matrix.script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-ui-electron-${{ matrix.os }}
+          path: out/make/zip/*.zip
+          retention-days: 7
+
+  release:
+    needs: [check-version, build]
+    if: needs.check-version.outputs.should-release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download Artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
           path: ./artifacts
-      - name: Find and list artifacts
-        id: find_artifacts
-        run: |
-          echo "=== Listing all artifacts ==="
-          find ./artifacts -type f -name "*.zip" | while read file; do
-            echo "Found: $file"
-          done
-          
-          # Find actual zip files
-          MACOS_ZIP=$(find ./artifacts -name "*darwin*x64*.zip" | head -1)
-          LINUX_ZIP=$(find ./artifacts -name "*linux*x64*.zip" | head -1)
-          WINDOWS_ZIP=$(find ./artifacts -name "*win32*x64*.zip" | head -1)
-          
-          echo "macos_zip=$MACOS_ZIP" >> $GITHUB_OUTPUT
-          echo "linux_zip=$LINUX_ZIP" >> $GITHUB_OUTPUT
-          echo "windows_zip=$WINDOWS_ZIP" >> $GITHUB_OUTPUT
-          
-          echo "MacOS artifact: $MACOS_ZIP"
-          echo "Linux artifact: $LINUX_ZIP"
-          echo "Windows artifact: $WINDOWS_ZIP"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.build.outputs.ver }}
-          name: swagger-ui-electron-v${{ needs.build.outputs.ver }}
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: swagger-ui-electron-v${{ needs.check-version.outputs.version }}
           draft: false
           prerelease: false
-          files: |
-            ${{ steps.find_artifacts.outputs.macos_zip }}
-            ${{ steps.find_artifacts.outputs.linux_zip }}
-            ${{ steps.find_artifacts.outputs.windows_zip }}
+          files: ./artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
