@@ -2,6 +2,12 @@ name: swagger-ui-electron
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_version_check:
+        description: 'Skip version check and force build'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '0 1 * * *'
   push:
@@ -30,10 +36,17 @@ jobs:
       - name: Check version
         id: check-version
         run: |
-          curl -s https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
-          curl -s https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          # 检查是否手动触发并跳过版本检查
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.skip_version_check }}" == "true" ]; then
+            echo "⚠ Manual trigger with skip_version_check=true"
+            SKIP_VERSION_CHECK=true node sync.js
+          else
+            curl -s https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
+            curl -s https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+            
+            node sync.js
+          fi
           
-          node sync.js
           EXIT_CODE=$?
           
           if [ $EXIT_CODE -eq 0 ]; then

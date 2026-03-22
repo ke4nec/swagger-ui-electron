@@ -3,6 +3,9 @@ const fs = require('fs');
 // curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
 // curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
 
+// 检查是否跳过版本检查（手动触发时）
+const SKIP_VERSION_CHECK = process.env.SKIP_VERSION_CHECK === 'true';
+
 function compareVersions(v1, v2) {
   // 移除 'v' 前缀（如果有）
   const cleanV1 = v1.replace(/^v/, '');
@@ -30,6 +33,15 @@ function compareVersions(v1, v2) {
 }
 
 try {
+  // 如果跳过版本检查，直接使用固定版本
+  if (SKIP_VERSION_CHECK) {
+    console.log('⚠ Skipping version check (manual trigger)');
+    const TARGET_VERSION = '5.32.1';
+    fs.writeFileSync('./ver.txt', TARGET_VERSION);
+    console.log(`✓ Version ${TARGET_VERSION} written to ver.txt`);
+    process.exit(0);
+  }
+
   // 检查文件是否存在
   if (!fs.existsSync('./npm.json')) {
     console.error('Error: npm.json not found. Please run: curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json');
