@@ -1,4 +1,5 @@
 name: swagger-ui-electron
+
 on:
   workflow_dispatch:
   schedule:
@@ -8,17 +9,21 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: check_verion
+      - uses: actions/checkout@v4
+      - name: check_version
         run: |
           curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
           curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
           node sync.js
           if [ $? == 1 ]; then exit 0; fi
+
   build:
     needs: check
     runs-on: ubuntu-latest
@@ -27,7 +32,7 @@ jobs:
     outputs:
       ver: ${{ steps.prepare.outputs.ver }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: prepare
         id: prepare
         run: |
@@ -36,7 +41,7 @@ jobs:
           node sync.js
           if [ $? == 1 ]; then exit 0; fi
           export VER=$(cat ver.txt)
-          echo "::set-output name=ver::$VER"
+          echo "ver=$VER" >> $GITHUB_OUTPUT
           apt-get update && apt-get install -y zip && chown root:root /github/home
       - run: |
           npm i swagger-ui-dist@latest
@@ -51,48 +56,41 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ needs.build.outputs.ver }}
-          release_name: swagger-ui-electron-v${{ needs.build.outputs.ver }}
-          draft: false
-          prerelease: false
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           name: artifacts
-      - name: Upload Macos Release Asset
-        if: steps.create_release.outputs.upload_url
-        uses: actions/upload-release-asset@v1.0.1
+          path: ./artifacts
+      - name: Find and list artifacts
+        id: find_artifacts
+        run: |
+          echo "=== Listing all artifacts ==="
+          find ./artifacts -type f -name "*.zip" | while read file; do
+            echo "Found: $file"
+          done
+          
+          # Find actual zip files
+          MACOS_ZIP=$(find ./artifacts -name "*darwin*x64*.zip" | head -1)
+          LINUX_ZIP=$(find ./artifacts -name "*linux*x64*.zip" | head -1)
+          WINDOWS_ZIP=$(find ./artifacts -name "*win32*x64*.zip" | head -1)
+          
+          echo "macos_zip=$MACOS_ZIP" >> $GITHUB_OUTPUT
+          echo "linux_zip=$LINUX_ZIP" >> $GITHUB_OUTPUT
+          echo "windows_zip=$WINDOWS_ZIP" >> $GITHUB_OUTPUT
+          
+          echo "MacOS artifact: $MACOS_ZIP"
+          echo "Linux artifact: $LINUX_ZIP"
+          echo "Windows artifact: $WINDOWS_ZIP"
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.ver }}
+          name: swagger-ui-electron-v${{ needs.build.outputs.ver }}
+          draft: false
+          prerelease: false
+          files: |
+            ${{ steps.find_artifacts.outputs.macos_zip }}
+            ${{ steps.find_artifacts.outputs.linux_zip }}
+            ${{ steps.find_artifacts.outputs.windows_zip }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./darwin/x64/swagger-ui-electron-darwin-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-darwin-x64-${{ needs.build.outputs.ver }}.zip
-          asset_content_type: application/zip
-      - name: Upload Linux Release Asset
-        if: steps.create_release.outputs.upload_url
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/x64/swagger-ui-electron-linux-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-linux-x64-${{ needs.build.outputs.ver }}.zip
-          asset_content_type: application/zip
-      - name: Upload Windows Release Asset
-        if: steps.create_release.outputs.upload_url
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./win32/x64/swagger-ui-electron-win32-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-win32-x64-${{ needs.build.outputs.ver }}.zip
-          asset_content_type: application/zip
-
