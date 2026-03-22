@@ -137,15 +137,19 @@ jobs:
       - name: List downloaded artifacts
         run: |
           echo "📦 Downloaded artifacts structure:"
-          find ./artifacts -type f -name "*.zip" | head -20
+          ls -R ./artifacts || echo "No artifacts directory found"
 
       - name: Prepare release files
         run: |
           echo "📋 Preparing release files..."
           mkdir -p ./release-files
-          find ./artifacts -type f -name "*.zip" -exec cp {} ./release-files/ \;
+          if [ -d "./artifacts" ]; then
+            find ./artifacts -type f -name "*.zip" -exec cp {} ./release-files/ \;
+          else
+            echo "⚠ Artifacts directory not found"
+          fi
           echo "✓ Files prepared:"
-          ls -lh ./release-files/
+          ls -lh ./release-files/ || echo "No files found"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
