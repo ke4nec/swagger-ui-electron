@@ -1,13 +1,6 @@
 name: swagger-ui-electron
-
 on:
   workflow_dispatch:
-    inputs:
-      skip_version_check:
-        description: 'Skip version check and force build'
-        required: false
-        type: boolean
-        default: false
   schedule:
     - cron: '0 1 * * *'
   push:
@@ -15,149 +8,90 @@ on:
       - main
       - master
 
-permissions:
-  contents: write
-
 jobs:
-  check-version:
+  check:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.check-version.outputs.version }}
-      should-release: ${{ steps.check-version.outputs.should-release }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Check version
-        id: check-version
+      - uses: actions/checkout@v2
+      - name: check_verion
         run: |
-          # 检查是否手动触发并跳过版本检查
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.skip_version_check }}" == "true" ]; then
-            echo "⚠ Manual trigger with skip_version_check=true"
-            SKIP_VERSION_CHECK=true node sync.js
-          else
-            curl -s https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
-            curl -s https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
-            
-            node sync.js
-          fi
-          
-          EXIT_CODE=$?
-          
-          if [ $EXIT_CODE -eq 0 ]; then
-            VERSION=$(cat ver.txt)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "should-release=true" >> $GITHUB_OUTPUT
-            echo "✓ New version available: $VERSION"
-          else
-            echo "version=none" >> $GITHUB_OUTPUT
-            echo "should-release=false" >> $GITHUB_OUTPUT
-            echo "✓ No update needed"
-          fi
-
+          curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
+          curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          node sync.js
+          if [ $? == 1 ]; then exit 0; fi
   build:
-    needs: check-version
-    if: needs.check-version.outputs.should-release == 'true'
-    runs-on: ${{ matrix.os == 'darwin' && 'macos-latest' || (matrix.os == 'win32' && 'windows-latest' || 'ubuntu-latest') }}
-    strategy:
-      matrix:
-        os: [win32, linux, darwin]
-        include:
-          - os: win32
-            script: make-win
-          - os: linux
-            script: make-linux
-          - os: darwin
-            script: make-mac
+    needs: check
+    runs-on: ubuntu-latest
+    container:
+      image: electronuserland/builder:wine
+    outputs:
+      ver: ${{ steps.prepare.outputs.ver }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        shell: bash
-        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        id: npm-cache
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Cache Electron build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-
-      - name: Install dependencies
+      - uses: actions/checkout@v2
+      - name: prepare
+        id: prepare
         run: |
+          curl https://registry.npmjs.org/swagger-ui-dist/latest > npm.json
+          curl https://api.github.com/repos/ke4nec/swagger-ui-electron/releases/latest > github.json
+          node sync.js
+          if [ $? == 1 ]; then exit 0; fi
+          export VER=$(cat ver.txt)
+          echo "::set-output name=ver::$VER"
+          apt-get update && apt-get install -y zip && chown root:root /github/home
+      - run: |
           npm i swagger-ui-dist@latest
           npm i
-
-      - name: Build for ${{ matrix.os }}
-        run: npm run ${{ matrix.script }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          npm run make-all
+      - uses: actions/upload-artifact@v4
         with:
-          name: swagger-ui-electron-${{ matrix.os }}
-          path: out/make/zip/*.zip
-          retention-days: 7
+          name: artifacts
+          path: out/make/zip/
 
-  release:
-    needs: [check-version, build]
-    if: needs.check-version.outputs.should-release == 'true'
+  deploy:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: List downloaded artifacts
-        run: |
-          echo "📦 Downloaded artifacts structure:"
-          ls -R ./artifacts || echo "No artifacts directory found"
-
-      - name: Prepare release files
-        run: |
-          echo "📋 Preparing release files..."
-          mkdir -p ./release-files
-          if [ -d "./artifacts" ]; then
-            find ./artifacts -type f -name "*.zip" -exec cp {} ./release-files/ \;
-          else
-            echo "⚠ Artifacts directory not found"
-          fi
-          echo "✓ Files prepared:"
-          ls -lh ./release-files/ || echo "No files found"
-
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.check-version.outputs.version }}
-          name: swagger-ui-electron-v${{ needs.check-version.outputs.version }}
-          draft: false
-          prerelease: false
-          files: ./release-files/*
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.build.outputs.ver }}
+          release_name: swagger-ui-electron-v${{ needs.build.outputs.ver }}
+          draft: false
+          prerelease: false
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts
+      - name: Upload Macos Release Asset
+        if: steps.create_release.outputs.upload_url
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./darwin/x64/swagger-ui-electron-darwin-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-darwin-x64-${{ needs.build.outputs.ver }}.zip
+          asset_content_type: application/zip
+      - name: Upload Linux Release Asset
+        if: steps.create_release.outputs.upload_url
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux/x64/swagger-ui-electron-linux-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-linux-x64-${{ needs.build.outputs.ver }}.zip
+          asset_content_type: application/zip
+      - name: Upload Windows Release Asset
+        if: steps.create_release.outputs.upload_url
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./win32/x64/swagger-ui-electron-win32-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-win32-x64-${{ needs.build.outputs.ver }}.zip
+          asset_content_type: application/zip
