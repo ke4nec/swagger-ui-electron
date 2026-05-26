@@ -8,6 +8,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -24,8 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: electronuserland/builder:wine
-    outputs:
-      ver: ${{ steps.prepare.outputs.ver }}
     steps:
       - uses: actions/checkout@v2
       - name: prepare
@@ -36,35 +37,22 @@ jobs:
           node sync.js
           if [ $? == 1 ]; then exit 0; fi
           export VER=$(cat ver.txt)
-          echo "::set-output name=ver::$VER"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
           apt-get update && apt-get install -y zip && chown root:root /github/home
       - run: |
           npm i swagger-ui-dist@latest
           npm i
           npm run make-all
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifacts
-          path: out/make/zip/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ needs.build.outputs.ver }}
-          release_name: swagger-ui-electron-v${{ needs.build.outputs.ver }}
+          tag_name: ${{ steps.prepare.outputs.ver }}
+          release_name: swagger-ui-electron-v${{ steps.prepare.outputs.ver }}
           draft: false
           prerelease: false
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: artifacts
       - name: Upload Macos Release Asset
         if: steps.create_release.outputs.upload_url
         uses: actions/upload-release-asset@v1.0.1
@@ -72,8 +60,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./darwin/x64/swagger-ui-electron-darwin-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-darwin-x64-${{ needs.build.outputs.ver }}.zip
+          asset_path: ./out/make/zip/darwin/x64/swagger-ui-electron-darwin-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-darwin-x64-${{ steps.prepare.outputs.ver }}.zip
           asset_content_type: application/zip
       - name: Upload Linux Release Asset
         if: steps.create_release.outputs.upload_url
@@ -82,8 +70,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/x64/swagger-ui-electron-linux-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-linux-x64-${{ needs.build.outputs.ver }}.zip
+          asset_path: ./out/make/zip/linux/x64/swagger-ui-electron-linux-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-linux-x64-${{ steps.prepare.outputs.ver }}.zip
           asset_content_type: application/zip
       - name: Upload Windows Release Asset
         if: steps.create_release.outputs.upload_url
@@ -92,6 +80,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./win32/x64/swagger-ui-electron-win32-x64-1.0.0.zip
-          asset_name: swagger-ui-electron-win32-x64-${{ needs.build.outputs.ver }}.zip
+          asset_path: ./out/make/zip/win32/x64/swagger-ui-electron-win32-x64-1.0.0.zip
+          asset_name: swagger-ui-electron-win32-x64-${{ steps.prepare.outputs.ver }}.zip
           asset_content_type: application/zip
